@@ -3,7 +3,7 @@ import { REACT_ELEMENT, REACT_TEXT } from "../shared/constants";
 function toObject(element) {
   if (typeof element === "string" || typeof element === "number") {
     return {
-      content: element,
+      props: element,
       $$typeof: REACT_TEXT,
     };
   }

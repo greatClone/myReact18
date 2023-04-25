@@ -1,54 +1,27 @@
-import FiberNode from "./fiberNode";
+import Fiber from "./fiber";
 import { HostRoot } from "./workTags";
+import renderRootSync from "./renderRootSync";
+import commitRoot from "./commitRoot";
 
-let workInProgress = {};
-
-function performUnitOfWork(unitOfWork) {}
-
-function renderRootSync(root) {
-  root.finishedWork = null;
-  workInProgress = root.current;
-  workInProgress.alternate = root.current;
-  root.current.alternate = workInProgress;
-
-  while (workInProgress !== null) {
-    performUnitOfWork(workInProgress);
-  }
-}
-
-function updateContainer(element, root) {
-  // 生成更新对象
-  const update = {
-    payload: element,
-    next: null,
-  };
-  // 入队更新
-  update.next = update;
-  const fiberNode = root.current;
-  fiberNode.updateQueue.shared.interleaved = update;
-
-  // 同步渲染
-  renderRootSync(root);
-  root.finishedWork = root.current.alternate;
-}
-
-export default function render(element, container) {
-  console.log(111, element, container);
-  // 生成root
-  const rootFiber = new FiberNode(HostRoot);
-  rootFiber.updateQueue = {
-    shared: {
-      pending: null,
-      interleaved: null,
-    },
-  };
+function render(element, container) {
+  // 生成一个全局的对象、根fiber
   const root = {
     containerInfo: container,
-    current: rootFiber,
+    finishedWork: null,
   };
-  rootFiber.stateNode = root;
-  container._reactContainer = root;
 
-  // 更新
-  updateContainer(element, root);
+  const hostRootFiber = new Fiber({
+    tag: HostRoot,
+    props: element,
+  });
+
+  root.current = hostRootFiber;
+  hostRootFiber.stateNode = root;
+
+  // 生成 dom 树
+  renderRootSync(root);
+  // 挂载
+  commitRoot(root);
 }
+
+export default render;
