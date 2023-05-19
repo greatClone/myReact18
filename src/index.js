@@ -3,11 +3,32 @@ import ReactDOM from "./reactDom";
 
 const element = (
   <div>
-    <h1>hello</h1>
-    <h2>world</h2>
+    <h1 className="test" title={"h"}>
+      hello
+    </h1>
+    <h2 style={{ color: "red" }}>world</h2>
   </div>
 );
 
-console.log(333444, element);
+function Fun() {
+  return (
+    <div>
+      <h1>函数式组件</h1>
+      {element}
+    </div>
+  );
+}
 
-ReactDOM.render(element, document.getElementById("root"));
+class ClassCom {
+  static isReactComponent = true;
+  render() {
+    return (
+      <div>
+        <h1>111111组件</h1>
+        {element}
+      </div>
+    );
+  }
+}
+
+ReactDOM.render(<ClassCom />, document.getElementById("root"));

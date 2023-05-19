@@ -13,7 +13,7 @@
     }
     return element;
   }
-  function createElement(type, config, ...children) {
+  function createElement$1(type, config, ...children) {
     let key = null;
     let ref = null;
     let props = {};
@@ -42,37 +42,73 @@
   }
 
   var React = {
-    createElement: createElement,
+    createElement: createElement$1,
   };
 
-  class FiberNode {
-    constructor({ tag, props, key, type }) {
+  const FunctionComponent = 0;
+  const ClassComponent = 1;
+  const HostRoot = 3;
+  const HostComponent = 5;
+  const HostText = 6;
+  function getTag(element) {
+    if (element.$$typeof === REACT_ELEMENT) {
+      if (typeof element.type === 'string') {
+        return HostComponent;
+      }
+      if (typeof element.type === 'function') {
+        if (element.type.isReactComponent) {
+          return ClassComponent;
+        }
+        return FunctionComponent;
+      }
+    }
+    if (element.$$typeof === REACT_TEXT) {
+      return HostText;
+    }
+  }
+
+  class Fiber {
+    constructor({ tag, props, type, key }) {
       this.tag = tag;
-      this.key = key;
-      this.type = type;
       this.pendingProps = props;
+      this.type = type;
+      this.key = key;
       this.child = null;
       this.sibling = null;
       this.return = null;
+      this.stateNode = null;
       this.alternate = null;
     }
   }
 
-  const HostRoot = 3;
-  const HostComponent = 5;
-  const HostText = 6;
-
+  // 工作单元，--> 子fiber
   function beginWork(workInProgress) {
     switch (workInProgress.tag) {
       case HostRoot:
         return updateHostRoot(workInProgress);
       case HostComponent:
         return updateHostComponent(workInProgress);
+      case FunctionComponent:
+        return updateFunctionComponent(workInProgress);
+      case ClassComponent:
+        return updateClassComponent(workInProgress);
       case HostText:
-        return updateHostText();
       default:
         return null;
     }
+  }
+  function updateFunctionComponent(workInProgress) {
+    const { type, pendingProps } = workInProgress;
+    const nextChildren = type(pendingProps);
+    workInProgress.child = reconcileChildren(workInProgress, nextChildren);
+    return workInProgress.child;
+  }
+  function updateClassComponent(workInProgress) {
+    const { type, pendingProps } = workInProgress;
+    const instance = new type(pendingProps);
+    const nextChildren = instance.render();
+    workInProgress.child = reconcileChildren(workInProgress, nextChildren);
+    return workInProgress.child;
   }
   function updateHostRoot(workInProgress) {
     const nextChildren = workInProgress.pendingProps;
@@ -84,66 +120,103 @@
     workInProgress.child = reconcileChildren(workInProgress, nextChildren);
     return workInProgress.child;
   }
-  function updateHostText(workInProgress) {
-    return null;
-  }
   function reconcileChildren(workInProgress, nextChildren) {
-    if (nextChildren.$$typeof === REACT_ELEMENT) {
-      return reconcileSingleElement(workInProgress, nextChildren);
-    }
     if (Array.isArray(nextChildren)) {
-      return reconcileChildrenArray(workInProgress, nextChildren);
+      return reconcileArrayChildren(workInProgress, nextChildren);
+    } else {
+      return reconcileSingElement(workInProgress, nextChildren);
     }
   }
-  function reconcileSingleElement(workInProgress, element) {
-    const created = new FiberNode({
+  function reconcileSingElement(workInProgress, element) {
+    const newFiber = new Fiber({
       tag: getTag(element),
       props: element.props,
       key: element.key,
       type: element.type,
     });
-    created.return = workInProgress;
-    return created;
+    newFiber.return = workInProgress;
+    return newFiber;
   }
-  function reconcileChildrenArray(workInProgress, nextChildren) {
-    let firstChildren = null;
+  function reconcileArrayChildren(workInProgress, nextChildren) {
+    let firstFiber = null;
     let prevFiber = null;
     nextChildren.forEach((child) => {
-      const newFiber = reconcileSingleElement(workInProgress, child);
-      if (!prevFiber) {
-        firstChildren = newFiber;
+      const newFiber = reconcileSingElement(workInProgress, child);
+      if (!firstFiber) {
+        firstFiber = newFiber;
       } else {
         prevFiber.sibling = newFiber;
       }
       prevFiber = newFiber;
     });
-    return firstChildren;
+    return firstFiber;
   }
-  function getTag(element) {
-    if (element.$$typeof === REACT_ELEMENT && typeof element.type === 'string') {
-      return HostComponent;
+
+  function createTextNode(text) {
+    return document.createTextNode(text);
+  }
+  function createElement(tag) {
+    return document.createElement(tag);
+  }
+  function appendChild(parentNode, node) {
+    parentNode.appendChild(node);
+  }
+
+  function completeWork(workInProgress) {
+    switch (workInProgress.tag) {
+      case HostText:
+        const textNode = createTextNode(workInProgress.pendingProps);
+        workInProgress.stateNode = textNode;
+        break;
+      case HostComponent:
+        // 生产dom
+        const dom = createElement(workInProgress.type);
+        // 挂载子元素
+        appendAllChildren(dom, workInProgress);
+        // 属性
+        initialDomProps(dom, workInProgress);
+        // 关联
+        workInProgress.stateNode = dom;
+        break;
     }
-    if (element.$$typeof === REACT_TEXT) {
-      return HostText;
+  }
+  function appendAllChildren(dom, workInProgress) {
+    let childFiber = workInProgress.child;
+    while (childFiber) {
+      const node = childFiber.stateNode;
+      appendChild(dom, node);
+      childFiber = childFiber.sibling;
+    }
+  }
+  function initialDomProps(dom, workInProgress) {
+    const { children, ...domProps } = workInProgress.pendingProps;
+    for (const [k, v] of Object.entries(domProps)) {
+      if (k === 'style') {
+        for (const [sk, sv] of Object.entries(v)) {
+          dom.style[sk] = sv;
+        }
+        continue;
+      }
+      dom[k] = v;
     }
   }
 
   let workInProgress = null;
   function renderRootSync(root) {
-    // 生成 workInProgress
+    // 生成工作单元
     workInProgress = {
       ...root.current,
     };
     workInProgress.alternate = root.current;
     root.current.alternate = workInProgress;
 
-    // 开始循环
+    // 循环
     while (workInProgress) {
       performUnitOfWork(workInProgress);
     }
   }
   function performUnitOfWork(unitOfWork) {
-    let next = beginWork(unitOfWork);
+    const next = beginWork(unitOfWork);
     if (!next) {
       completeUnitOfWork(unitOfWork);
     } else {
@@ -151,26 +224,53 @@
     }
   }
   function completeUnitOfWork(unitOfWork) {
-    console.log(1122, unitOfWork);
-    workInProgress = null;
+    let completedWork = unitOfWork;
+    while (completedWork) {
+      // 完成当前节点
+      completeWork(completedWork);
+      // 是否有兄弟节点，begin
+      if (completedWork.sibling) {
+        workInProgress = completedWork.sibling;
+        return;
+      }
+      // 完成父元素
+      workInProgress = completedWork = completedWork.return;
+    }
+  }
+
+  function commitRoot(root) {
+    const finishedWork = root.finishedWork;
+    const parentNode = root.containerInfo;
+    let childFiber = finishedWork.child;
+    let node = null;
+    while (!node) {
+      node = childFiber.stateNode;
+      childFiber = childFiber.child;
+    }
+    appendChild(parentNode, node);
   }
 
   function render(element, container) {
-    console.log(999, element);
-    // 生成一个全局的对象、根fiber
+    // 生成根对象
     const root = {
       containerInfo: container,
       finishedWork: null,
+      current: null,
     };
-    const hostRootFiber = new FiberNode({
+    // 生产根fiber
+    const hostRootFiber = new Fiber({
       tag: HostRoot,
       props: element,
     });
     root.current = hostRootFiber;
     hostRootFiber.stateNode = root;
 
-    // 生成 dom 树
+    // 生成dom
     renderRootSync(root);
+    root.finishedWork = root.current.alternate;
+
+    // 挂载
+    commitRoot(root);
   }
 
   var ReactDOM = {
@@ -180,10 +280,35 @@
   const element = /*#__PURE__*/ React.createElement(
     'div',
     null,
-    /*#__PURE__*/ React.createElement('h1', null, 'hello'),
-    /*#__PURE__*/ React.createElement('h2', null, 'world'),
+    /*#__PURE__*/ React.createElement(
+      'h1',
+      {
+        className: 'test',
+        title: 'h',
+      },
+      'hello',
+    ),
+    /*#__PURE__*/ React.createElement(
+      'h2',
+      {
+        style: {
+          color: 'red',
+        },
+      },
+      'world',
+    ),
   );
-  console.log(333444, element);
-  ReactDOM.render(element, document.getElementById('root'));
+  class ClassCom {
+    static isReactComponent = true;
+    render() {
+      return /*#__PURE__*/ React.createElement(
+        'div',
+        null,
+        /*#__PURE__*/ React.createElement('h1', null, '111111\u7EC4\u4EF6'),
+        element,
+      );
+    }
+  }
+  ReactDOM.render(/*#__PURE__*/ React.createElement(ClassCom, null), document.getElementById('root'));
 })();
 //# sourceMappingURL=bundle.js.map

@@ -1,17 +1,17 @@
-class FiberNode {
-  constructor({ tag, props, key, type }) {
+class Fiber {
+  constructor({ tag, props, type, key }) {
     this.tag = tag;
-    this.key = key;
-    this.type = type;
-
     this.pendingProps = props;
+    this.type = type;
+    this.key = key;
 
     this.child = null;
     this.sibling = null;
     this.return = null;
 
+    this.stateNode = null;
     this.alternate = null;
   }
 }
 
-export default FiberNode;
+export { Fiber };
