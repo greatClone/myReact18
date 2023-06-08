@@ -76,6 +76,9 @@
       this.child = null;
       this.sibling = null;
       this.return = null;
+      this.updateQueue = {
+        share: {},
+      };
       this.stateNode = null;
       this.alternate = null;
     }
@@ -111,7 +114,7 @@
     return workInProgress.child;
   }
   function updateHostRoot(workInProgress) {
-    const nextChildren = workInProgress.pendingProps;
+    const nextChildren = workInProgress.updateQueue.share.pending.payload;
     workInProgress.child = reconcileChildren(workInProgress, nextChildren);
     return workInProgress.child;
   }
@@ -177,6 +180,8 @@
         initialDomProps(dom, workInProgress);
         // 关联
         workInProgress.stateNode = dom;
+        dom['__reactFiber'] = workInProgress;
+        dom['__reactProps'] = workInProgress.pendingProps;
         break;
     }
   }
@@ -199,6 +204,18 @@
       }
       dom[k] = v;
     }
+  }
+
+  function commitRoot(root) {
+    const finishedWork = root.finishedWork;
+    const parentNode = root.containerInfo;
+    let childFiber = finishedWork.child;
+    let node = null;
+    while (!node) {
+      node = childFiber.stateNode;
+      childFiber = childFiber.child;
+    }
+    appendChild(parentNode, node);
   }
 
   let workInProgress = null;
@@ -237,17 +254,112 @@
       workInProgress = completedWork = completedWork.return;
     }
   }
+  function performSyncWorkOnRoot(root) {
+    // 生成dom
+    renderRootSync(root);
+    root.finishedWork = root.current.alternate;
 
-  function commitRoot(root) {
-    const finishedWork = root.finishedWork;
-    const parentNode = root.containerInfo;
-    let childFiber = finishedWork.child;
-    let node = null;
-    while (!node) {
-      node = childFiber.stateNode;
-      childFiber = childFiber.child;
+    // 挂载
+    commitRoot(root);
+  }
+
+  class SynctheticEvent {
+    constructor(nativeEvent) {
+      this.nativeEvent = nativeEvent;
+      for (const [k, v] of Object.entries(nativeEvent)) {
+        this[k] = v;
+      }
     }
-    appendChild(parentNode, node);
+    preventDefault() {}
+    stopPropagation() {}
+  }
+
+  const allEvent = ['click', 'keyDown'];
+
+  // 注册
+  function listenToAllEvent(container) {
+    allEvent.forEach((eventName) => {
+      const listener = dispatchEvent.bind(null, eventName);
+      container.addEventListener(eventName, listener);
+    });
+  }
+
+  // 触发
+  function dispatchEvent(eventName, nativeEvent) {
+    // 合成事件
+    const synctheticEvent = new SynctheticEvent(nativeEvent);
+    // 获取listener
+    const listeners = accumulateSinglePhaseListeners(nativeEvent, eventName);
+    // 执行
+    listeners.forEach((listen) => {
+      listen(synctheticEvent);
+    });
+  }
+
+  // 冒泡收集
+  function accumulateSinglePhaseListeners(nativeEvent, eventName) {
+    const listeners = [];
+    let targetFiber = nativeEvent.target.__reactFiber;
+    while (targetFiber) {
+      const { tag, stateNode } = targetFiber;
+      if (tag === HostComponent && stateNode) {
+        const listenerName = `on${eventName[0].toUpperCase()}${eventName.slice(1)}`;
+        const props = stateNode.__reactProps;
+        const listener = props[listenerName];
+        if (listener) {
+          listeners.push(listener);
+        }
+      }
+      targetFiber = targetFiber.return;
+    }
+    return listeners;
+  }
+
+  let syncQueue = null;
+  function scheduleCallback(callback) {
+    if (!syncQueue) {
+      syncQueue = [callback];
+    } else {
+      syncQueue.push(callback);
+    }
+  }
+  function flushSyncQueue() {
+    if (syncQueue) {
+      syncQueue.forEach((task) => {
+        task();
+      });
+    }
+  }
+
+  function updateContainer(element, container) {
+    // 生成更新
+    const update = {
+      payload: element,
+    };
+
+    // 挂载
+    enqueueUpdate(container.current, update);
+
+    // 调度
+    scheduleUpdateOnFiber(container);
+  }
+  function enqueueUpdate(fiber, update) {
+    fiber.updateQueue.share.pending = update;
+    let returnFiber = fiber;
+    while (returnFiber.return) {
+      returnFiber = returnFiber.return;
+    }
+    return returnFiber;
+  }
+
+  // 调度入口
+  function scheduleUpdateOnFiber(root) {
+    ensureRootIsScheduled(root);
+  }
+
+  // 调度
+  function ensureRootIsScheduled(root) {
+    scheduleCallback(performSyncWorkOnRoot.bind(null, root));
   }
 
   function render(element, container) {
@@ -260,17 +372,20 @@
     // 生产根fiber
     const hostRootFiber = new Fiber({
       tag: HostRoot,
-      props: element,
     });
     root.current = hostRootFiber;
     hostRootFiber.stateNode = root;
-
-    // 生成dom
-    renderRootSync(root);
-    root.finishedWork = root.current.alternate;
-
-    // 挂载
-    commitRoot(root);
+    listenToAllEvent(container);
+    flushSync(() => {
+      updateContainer(element, root);
+    });
+  }
+  function flushSync(fn) {
+    try {
+      fn();
+    } finally {
+      flushSyncQueue();
+    }
   }
 
   var ReactDOM = {
@@ -279,12 +394,15 @@
 
   const element = /*#__PURE__*/ React.createElement(
     'div',
-    null,
+    {
+      onClick: () => console.log(334444, 'div'),
+    },
     /*#__PURE__*/ React.createElement(
       'h1',
       {
         className: 'test',
         title: 'h',
+        onClick: () => console.log(334444, 'h1'),
       },
       'hello',
     ),
@@ -298,17 +416,6 @@
       'world',
     ),
   );
-  class ClassCom {
-    static isReactComponent = true;
-    render() {
-      return /*#__PURE__*/ React.createElement(
-        'div',
-        null,
-        /*#__PURE__*/ React.createElement('h1', null, '111111\u7EC4\u4EF6'),
-        element,
-      );
-    }
-  }
-  ReactDOM.render(/*#__PURE__*/ React.createElement(ClassCom, null), document.getElementById('root'));
+  ReactDOM.render(element, document.getElementById('root'));
 })();
 //# sourceMappingURL=bundle.js.map

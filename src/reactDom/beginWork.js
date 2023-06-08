@@ -41,7 +41,7 @@ function updateClassComponent(workInProgress) {
 }
 
 function updateHostRoot(workInProgress) {
-  const nextChildren = workInProgress.pendingProps;
+  const nextChildren = workInProgress.updateQueue.share.pending.payload;
   workInProgress.child = reconcileChildren(workInProgress, nextChildren);
   return workInProgress.child;
 }

@@ -22,6 +22,8 @@ function completeWork(workInProgress) {
       initialDomProps(dom, workInProgress);
       // 关联
       workInProgress.stateNode = dom;
+      dom["__reactFiber"] = workInProgress;
+      dom["__reactProps"] = workInProgress.pendingProps;
       break;
     case FunctionComponent:
     case ClassComponent:

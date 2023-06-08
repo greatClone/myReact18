@@ -1,5 +1,6 @@
 import { beginWork } from "./beginWork";
 import { completeWork } from "./completeWork";
+import { commitRoot } from "./commitRoot";
 
 let workInProgress = null;
 function renderRootSync(root) {
@@ -39,4 +40,14 @@ function completeUnitOfWork(unitOfWork) {
   }
 }
 
-export { renderRootSync };
+function performSyncWorkOnRoot(root) {
+  // 生成dom
+  renderRootSync(root);
+
+  root.finishedWork = root.current.alternate;
+
+  // 挂载
+  commitRoot(root);
+}
+
+export { renderRootSync, performSyncWorkOnRoot };
