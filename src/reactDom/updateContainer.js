@@ -20,7 +20,7 @@ function enqueueUpdate(fiber, update) {
   while (returnFiber.return) {
     returnFiber = returnFiber.return;
   }
-  return returnFiber;
+  return returnFiber.stateNode;
 }
 
 // 调度入口
@@ -33,4 +33,4 @@ function ensureRootIsScheduled(root) {
   scheduleCallback(performSyncWorkOnRoot.bind(null, root));
 }
 
-export { updateContainer };
+export { updateContainer, enqueueUpdate, scheduleUpdateOnFiber };

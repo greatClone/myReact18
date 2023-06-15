@@ -1,12 +1,15 @@
 import SynctheticEvent from "./synctheticEvent";
 import { HostComponent } from "./workTags";
+import { flushSync } from "./render";
 
 const allEvent = ["click", "keyDown"];
 
 // 注册
 function listenToAllEvent(container) {
   allEvent.forEach((eventName) => {
-    const listener = dispatchEvent.bind(null, eventName);
+    const listener = (e) => {
+      flushSync(dispatchEvent.bind(null, eventName, e));
+    };
     container.addEventListener(eventName, listener);
   });
 }

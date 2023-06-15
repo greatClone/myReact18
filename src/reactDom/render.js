@@ -36,4 +36,4 @@ function flushSync(fn) {
   }
 }
 
-export { render };
+export { render, flushSync };

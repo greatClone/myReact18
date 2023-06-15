@@ -14,6 +14,7 @@ function flushSyncQueue() {
       task();
     });
   }
+  syncQueue = null;
 }
 
 export { scheduleCallback, flushSyncQueue };

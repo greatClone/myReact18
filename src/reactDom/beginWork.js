@@ -8,6 +8,11 @@ import {
   HostText,
 } from "./workTags";
 import { Fiber } from "./fiber";
+import {
+  constructClassInstance,
+  finishClassInstance,
+  mountClassInstance,
+} from "./classComponent";
 
 function beginWork(workInProgress) {
   switch (workInProgress.tag) {
@@ -33,11 +38,10 @@ function updateFunctionComponent(workInProgress) {
 }
 
 function updateClassComponent(workInProgress) {
-  const { type, pendingProps } = workInProgress;
-  const instance = new type(pendingProps);
-  const nextChildren = instance.render();
-  workInProgress.child = reconcileChildren(workInProgress, nextChildren);
-  return workInProgress.child;
+  constructClassInstance(workInProgress);
+  mountClassInstance(workInProgress);
+  const nextUnitOfWork = finishClassInstance(workInProgress);
+  return nextUnitOfWork;
 }
 
 function updateHostRoot(workInProgress) {
@@ -89,4 +93,4 @@ function reconcileArrayChildren(workInProgress, nextChildren) {
   return firstFiber;
 }
 
-export { beginWork };
+export { beginWork, reconcileChildren };

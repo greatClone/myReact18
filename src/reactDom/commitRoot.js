@@ -1,4 +1,5 @@
 import { appendChild } from "./domOperations";
+import { HostComponent } from "./workTags";
 
 function commitRoot(root) {
   const finishedWork = root.finishedWork;
@@ -6,7 +7,9 @@ function commitRoot(root) {
   let childFiber = finishedWork.child;
   let node = null;
   while (!node) {
-    node = childFiber.stateNode;
+    if (childFiber.tag === HostComponent) {
+      node = childFiber.stateNode;
+    }
     childFiber = childFiber.child;
   }
   appendChild(parentNode, node);

@@ -10,4 +10,26 @@ const element = (
   </div>
 );
 
-ReactDOM.render(element, document.getElementById("root"));
+class App extends React.Component {
+  constructor() {
+    super();
+    this.state = {
+      a: 1,
+    };
+  }
+  render() {
+    return (
+      <div
+        onClick={() => {
+          this.setState({
+            a: 2,
+          });
+        }}
+      >
+        hello-world-a-{this.state.a}
+      </div>
+    );
+  }
+}
+
+ReactDOM.render(<App />, document.getElementById("root"));
